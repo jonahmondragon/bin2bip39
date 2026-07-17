@@ -1,0 +1,20 @@
+# Binaries
+/bin2bip39
+/tests/test_bin2bip39
+
+# Object files / archives
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+
+# Vendored zstd build output
+/third_party/zstd/obj/
+/third_party/zstd/libzstd.pc
+
+# Editor / OS
+*~
+*.swp
+*.swo
+.DS_Store
