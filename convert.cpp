@@ -1,13 +1,13 @@
 #include "convert.hpp"
-
 #include "wordlist.hpp"
 
 #include <zstd.h>
 
 #include <algorithm>
 #include <sstream>
+#include <string>
 
-namespace bin2bip39
+namespace wordlist
 {
 namespace
 {
@@ -45,8 +45,8 @@ void set_bit(std::vector<std::uint8_t>& data, std::size_t bit_index, int bit)
 
 int word_index(std::string_view word)
 {
-    const auto begin = bip39::WORDLIST.begin();
-    const auto end = bip39::WORDLIST.end();
+    const auto begin = ::wordlist::WORDLIST.begin();
+    const auto end = ::wordlist::WORDLIST.end();
     const auto it = std::lower_bound(begin, end, word);
     if (it == end || *it != word)
     {
@@ -72,7 +72,7 @@ binary_to_words(const std::vector<std::uint8_t>& payload)
 
     const std::size_t total_bits = data.size() * 8;
     const std::size_t word_count =
-        (total_bits + bip39::BITS_PER_WORD - 1) / bip39::BITS_PER_WORD;
+        (total_bits + ::wordlist::BITS_PER_WORD - 1) / ::wordlist::BITS_PER_WORD;
 
     std::vector<std::string_view> words;
     words.reserve(word_count);
@@ -80,13 +80,13 @@ binary_to_words(const std::vector<std::uint8_t>& payload)
     for (std::size_t w = 0; w < word_count; ++w)
     {
         unsigned index = 0;
-        for (std::size_t b = 0; b < bip39::BITS_PER_WORD; ++b)
+        for (std::size_t b = 0; b < ::wordlist::BITS_PER_WORD; ++b)
         {
             index = (index << 1) |
                     static_cast<unsigned>(
-                        get_bit(data, w * bip39::BITS_PER_WORD + b));
+                        get_bit(data, w * ::wordlist::BITS_PER_WORD + b));
         }
-        words.push_back(bip39::WORDLIST[index]);
+        words.push_back(::wordlist::WORDLIST[index]);
     }
     return words;
 }
@@ -114,21 +114,21 @@ bool words_to_binary(const std::vector<std::string>& words,
     }
 
     std::vector<std::uint8_t> data;
-    data.reserve((words.size() * bip39::BITS_PER_WORD + 7) / 8);
+    data.reserve((words.size() * ::wordlist::BITS_PER_WORD + 7) / 8);
 
     for (std::size_t w = 0; w < words.size(); ++w)
     {
         const int index = word_index(words[w]);
         if (index < 0)
         {
-            err = "unknown BIP39 word: " + words[w];
+            err = "unknown word: " + std::string(words[w]);
             return false;
         }
-        for (std::size_t b = 0; b < bip39::BITS_PER_WORD; ++b)
+        for (std::size_t b = 0; b < ::wordlist::BITS_PER_WORD; ++b)
         {
             const int bit =
-                (index >> (bip39::BITS_PER_WORD - 1 - b)) & 1;
-            set_bit(data, w * bip39::BITS_PER_WORD + b, bit);
+                (index >> (::wordlist::BITS_PER_WORD - 1 - b)) & 1;
+            set_bit(data, w * ::wordlist::BITS_PER_WORD + b, bit);
         }
     }
 
@@ -151,7 +151,7 @@ bool words_to_binary(const std::vector<std::string>& words,
     }
 
     const std::size_t used_bits = (4 + static_cast<std::size_t>(len)) * 8;
-    const std::size_t total_bits = words.size() * bip39::BITS_PER_WORD;
+    const std::size_t total_bits = words.size() * ::wordlist::BITS_PER_WORD;
     for (std::size_t i = used_bits; i < total_bits; ++i)
     {
         if (get_bit(data, i) != 0)
@@ -230,4 +230,4 @@ bool decompress_zstd(const std::vector<std::uint8_t>& in,
     return true;
 }
 
-}  // namespace bin2bip39
+}  // namespace wordlist

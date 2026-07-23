@@ -5,11 +5,11 @@
 #include <string_view>
 #include <vector>
 
-namespace bin2bip39
+namespace wordlist
 {
 
-// Binary -> BIP39 words. Layout: 4-byte BE length + payload, zero-padded
-// to 11-bit groups.
+// Binary -> wordlist words. Layout: 4-byte BE length + payload, zero-padded
+// to 13-bit groups.
 std::vector<std::string_view>
 binary_to_words(const std::vector<std::uint8_t>& payload);
 
@@ -28,4 +28,4 @@ bool decompress_zstd(const std::vector<std::uint8_t>& in,
                      std::vector<std::uint8_t>& out,
                      std::string& err);
 
-}  // namespace bin2bip39
+}  // namespace wordlist

@@ -1,8 +1,10 @@
 #include "convert.hpp"
+#include "wordlist.hpp"
 
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -17,10 +19,78 @@ void usage(const char* argv0)
               << " [options] [input-file|-] [output-file]\n"
               << "  input-file may be omitted or '-' to read from stdin\n"
               << "Options (non-positional):\n"
-              << "  -w, --word-to-binary   BIP39 words -> binary"
+              << "  -w, --word-to-binary   words -> binary"
               << " (default: binary -> words)\n"
               << "  -c, --compression     lossless zstd compress before encode /\n"
-              << "                        decompress after decode\n";
+              << "                        decompress after decode\n"
+              << "  -r, --random N [fmt]  output N random words (fmt: space|nospace|newline)\n";
+}
+
+bool parse_u64(std::string_view s, std::uint64_t& out)
+{
+    if (s.empty())
+    {
+        return false;
+    }
+    std::uint64_t v = 0;
+    for (char c : s)
+    {
+        if (c < '0' || c > '9')
+        {
+            return false;
+        }
+        const std::uint64_t d = static_cast<std::uint64_t>(c - '0');
+        if (v > (UINT64_MAX - d) / 10)
+        {
+            return false;
+        }
+        v = v * 10 + d;
+    }
+    out = v;
+    return true;
+}
+
+bool write_random_words(std::ostream& out, std::uint64_t n, std::string_view fmt)
+{
+    // Prefer real EFF words; skip synthetic zzpad* fillers.
+    constexpr std::size_t real_count = 7776;
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<std::size_t> dist(0, real_count - 1);
+
+    const char* sep = " ";
+    bool newline_each = false;
+    if (fmt == "nospace")
+    {
+        sep = "";
+    }
+    else if (fmt == "newline")
+    {
+        sep = "\n";
+        newline_each = true;
+    }
+    else if (fmt != "space" && !fmt.empty())
+    {
+        return false;
+    }
+
+    for (std::uint64_t i = 0; i < n; ++i)
+    {
+        if (i > 0 && !newline_each)
+        {
+            out << sep;
+        }
+        out << ::wordlist::WORDLIST[dist(gen)];
+        if (newline_each)
+        {
+            out << '\n';
+        }
+    }
+    if (!newline_each && n > 0)
+    {
+        out << '\n';
+    }
+    return static_cast<bool>(out);
 }
 
 bool is_stdin_path(const std::string& path)
@@ -124,6 +194,9 @@ int main(int argc, char* argv[])
 {
     bool reverse = false;
     bool compress = false;
+    bool random_mode = false;
+    std::uint64_t random_count = 0;
+    std::string_view random_fmt = "space";
     std::vector<std::string> positionals;
 
     for (int i = 1; i < argc; ++i)
@@ -139,6 +212,32 @@ int main(int argc, char* argv[])
             compress = true;
             continue;
         }
+        if (arg == "-r" || arg == "--random")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "error: " << arg << " requires N\n";
+                usage(argv[0]);
+                return 1;
+            }
+            ++i;
+            if (!parse_u64(argv[i], random_count) || random_count == 0)
+            {
+                std::cerr << "error: invalid random count: " << argv[i] << '\n';
+                return 1;
+            }
+            random_mode = true;
+            if (i + 1 < argc)
+            {
+                const std::string_view maybe = argv[i + 1];
+                if (maybe == "space" || maybe == "nospace" || maybe == "newline")
+                {
+                    random_fmt = maybe;
+                    ++i;
+                }
+            }
+            continue;
+        }
         if (arg == "-")
         {
             positionals.emplace_back("-");
@@ -151,6 +250,21 @@ int main(int argc, char* argv[])
             return 1;
         }
         positionals.emplace_back(arg);
+    }
+
+    if (random_mode)
+    {
+        if (reverse || compress || !positionals.empty())
+        {
+            std::cerr << "error: -r/--random cannot be combined with other modes\n";
+            return 1;
+        }
+        if (!write_random_words(std::cout, random_count, random_fmt))
+        {
+            std::cerr << "error: invalid random format (use space|nospace|newline)\n";
+            return 1;
+        }
+        return 0;
     }
 
     if (positionals.size() > 2)
@@ -179,7 +293,7 @@ int main(int argc, char* argv[])
         {
             std::vector<std::uint8_t> compressed;
             std::string err;
-            if (!bin2bip39::compress_zstd(payload, compressed, err))
+            if (!wordlist::compress_zstd(payload, compressed, err))
             {
                 std::cerr << "error: " << err << '\n';
                 return 1;
@@ -187,7 +301,7 @@ int main(int argc, char* argv[])
             payload.swap(compressed);
         }
 
-        const auto words = bin2bip39::binary_to_words(payload);
+        const auto words = wordlist::binary_to_words(payload);
 
         if (output_path)
         {
@@ -214,10 +328,10 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    const auto words = bin2bip39::split_words(text);
+    const auto words = wordlist::split_words(text);
     std::vector<std::uint8_t> payload;
     std::string err;
-    if (!bin2bip39::words_to_binary(words, payload, err))
+    if (!wordlist::words_to_binary(words, payload, err))
     {
         std::cerr << "error: " << err << '\n';
         return 1;
@@ -226,7 +340,7 @@ int main(int argc, char* argv[])
     if (compress)
     {
         std::vector<std::uint8_t> decompressed;
-        if (!bin2bip39::decompress_zstd(payload, decompressed, err))
+        if (!wordlist::decompress_zstd(payload, decompressed, err))
         {
             std::cerr << "error: " << err << '\n';
             return 1;

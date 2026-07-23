@@ -135,16 +135,16 @@ void test_unit_roundtrip_hello()
 {
     std::cout << "unit: round-trip hello\n";
     const auto payload = bytes_from("hello");
-    const auto words = bin2bip39::binary_to_words(payload);
-    check(words.size() == 7, "hello encodes to 7 words");
+    const auto words = wordlist::binary_to_words(payload);
+    check(words.size() == 6, "hello encodes to 6 words");
     check(join_words(words) ==
-              "abandon abandon access speak fine curtain rose",
+              "abacus abacus broiling deepen stimuli unfasten",
           "hello word phrase matches");
 
     std::vector<std::string> word_strs(words.begin(), words.end());
     std::vector<std::uint8_t> decoded;
     std::string err;
-    const bool ok = bin2bip39::words_to_binary(word_strs, decoded, err);
+    const bool ok = wordlist::words_to_binary(word_strs, decoded, err);
     check(ok, "words_to_binary succeeds");
     check(vectors_equal(payload, decoded), "decoded equals original");
 }
@@ -153,13 +153,13 @@ void test_unit_empty()
 {
     std::cout << "unit: empty payload\n";
     const std::vector<std::uint8_t> payload;
-    const auto words = bin2bip39::binary_to_words(payload);
+    const auto words = wordlist::binary_to_words(payload);
     check(!words.empty(), "empty payload produces words");
 
     std::vector<std::string> word_strs(words.begin(), words.end());
     std::vector<std::uint8_t> decoded;
     std::string err;
-    const bool ok = bin2bip39::words_to_binary(word_strs, decoded, err);
+    const bool ok = wordlist::words_to_binary(word_strs, decoded, err);
     check(ok, "empty round-trip succeeds");
     check(decoded.empty(), "decoded empty payload is empty");
 }
@@ -168,11 +168,11 @@ void test_unit_binary_bytes()
 {
     std::cout << "unit: binary bytes 00 01 02 ff\n";
     const std::vector<std::uint8_t> payload = {0x00, 0x01, 0x02, 0xFF};
-    const auto words = bin2bip39::binary_to_words(payload);
+    const auto words = wordlist::binary_to_words(payload);
     std::vector<std::string> word_strs(words.begin(), words.end());
     std::vector<std::uint8_t> decoded;
     std::string err;
-    const bool ok = bin2bip39::words_to_binary(word_strs, decoded, err);
+    const bool ok = wordlist::words_to_binary(word_strs, decoded, err);
     check(ok, "binary bytes round-trip succeeds");
     check(vectors_equal(payload, decoded), "binary bytes match");
 }
@@ -180,10 +180,10 @@ void test_unit_binary_bytes()
 void test_unit_unknown_word()
 {
     std::cout << "unit: unknown word rejected\n";
-    const std::vector<std::string> words = {"abandon", "notaword"};
+    const std::vector<std::string> words = {"abacus", "notaword"};
     std::vector<std::uint8_t> decoded;
     std::string err;
-    const bool ok = bin2bip39::words_to_binary(words, decoded, err);
+    const bool ok = wordlist::words_to_binary(words, decoded, err);
     check(!ok, "unknown word fails");
     check(err.find("unknown") != std::string::npos, "error mentions unknown");
 }
@@ -200,23 +200,23 @@ void test_unit_compression_roundtrip()
 
     std::string err;
     std::vector<std::uint8_t> compressed;
-    check(bin2bip39::compress_zstd(payload, compressed, err), "compress ok");
+    check(wordlist::compress_zstd(payload, compressed, err), "compress ok");
     check(compressed.size() < payload.size(), "compressed smaller");
 
-    const auto words = bin2bip39::binary_to_words(compressed);
+    const auto words = wordlist::binary_to_words(compressed);
     std::vector<std::string> word_strs(words.begin(), words.end());
     std::vector<std::uint8_t> encoded_payload;
-    check(bin2bip39::words_to_binary(word_strs, encoded_payload, err),
+    check(wordlist::words_to_binary(word_strs, encoded_payload, err),
           "decode words ok");
     check(vectors_equal(compressed, encoded_payload),
           "word payload is compressed data");
 
     std::vector<std::uint8_t> decompressed;
-    check(bin2bip39::decompress_zstd(encoded_payload, decompressed, err),
+    check(wordlist::decompress_zstd(encoded_payload, decompressed, err),
           "decompress ok");
     check(vectors_equal(payload, decompressed),
           "decompressed equals original");
-    check(words.size() == 27, "compressible sample encodes to 27 words");
+    check(words.size() == 23, "compressible sample encodes to 23 words");
 }
 
 void test_unit_split_words()
@@ -225,7 +225,7 @@ void test_unit_split_words()
     const auto words =
         wordlist::split_words("  abacus   zoo\nability  \t");
     check(words.size() == 3, "split yields 3 words");
-    check(words[0] == "abandon" && words[1] == "zoo" &&
+    check(words[0] == "abacus" && words[1] == "zoo" &&
               words[2] == "ability",
           "split tokens correct");
 }
@@ -254,7 +254,7 @@ void test_cli(const fs::path& bin, const fs::path& tmp)
     check(vectors_equal(read_binary_file(in_bin), read_binary_file(out_bin2)),
           "round-trip --word-to-binary matches");
     check(read_text_file(words_path).find(
-              "abandon abandon access speak fine curtain rose") !=
+              "abacus abacus broiling deepen stimuli unfasten") !=
               std::string::npos,
           "cli phrase matches unit");
 

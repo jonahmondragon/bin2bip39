@@ -1,6 +1,6 @@
-# bin2bip39
+# wordlist
 
-Convert any binary file to a BIP39 English word list — and back.
+Convert any binary file to an EFF large word list — and back.
 
 ## Build
 
@@ -10,18 +10,25 @@ make
 
 Requires a C++17 compiler. Compression uses **vendored [zstd](https://github.com/facebook/zstd)** (`third_party/zstd`); no system libraries needed.
 
+Regenerate the embedded list after editing `wordlist.txt`:
+
+```bash
+./generate_wordlist.sh
+```
+
 ## Usage
 
 ```bash
-bin2bip39 [options] [input-file|-] [output-file]
+wordlist [options] [input-file|-] [output-file]
 ```
 
 | Direction | Command |
 |-----------|---------|
-| Binary → words | `bin2bip39 file.bin [out.words]` |
-| Words → binary | `bin2bip39 -w file.words [out.bin]` |
-| With compression | `bin2bip39 -c file.bin` / `bin2bip39 -w -c file.words` |
-| From stdin | `cat file.bin \| bin2bip39` or `bin2bip39 -` |
+| Binary → words | `wordlist file.bin [out.words]` |
+| Words → binary | `wordlist -w file.words [out.bin]` |
+| With compression | `wordlist -c file.bin` / `wordlist -w -c file.words` |
+| Random words | `wordlist -r 6` / `wordlist -r 6 nospace` |
+| From stdin | `cat file.bin \| wordlist` or `wordlist -` |
 
 ### Options
 
@@ -29,6 +36,7 @@ bin2bip39 [options] [input-file|-] [output-file]
 |------|-------------|
 | `-w`, `--word-to-binary` | Decode words to binary (default: encode) |
 | `-c`, `--compression` | Lossless zstd compress before encode / decompress after decode |
+| `-r`, `--random N [fmt]` | Print N random words (`space`, `nospace`, or `newline`) |
 
 Flags are non-positional. Omit `input-file` (or use `-`) to read stdin; omit `output-file` to write stdout.
 
@@ -36,25 +44,28 @@ Flags are non-positional. Omit `input-file` (or use `-`) to read stdin; omit `ou
 
 ```bash
 # Encode
-./bin2bip39 secret.bin phrase.txt
+./wordlist secret.bin phrase.txt
 
 # Decode
-./bin2bip39 -w phrase.txt secret.bin
+./wordlist -w phrase.txt secret.bin
 
 # Compress + encode, then restore
-./bin2bip39 -c data.bin words.txt
-./bin2bip39 -w -c words.txt data.bin
+./wordlist -c data.bin words.txt
+./wordlist -w -c words.txt data.bin
 
 # Pipes
-printf 'hello' | ./bin2bip39
-cat words.txt | ./bin2bip39 -w > out.bin
+printf 'hello' | ./wordlist
+cat words.txt | ./wordlist -w > out.bin
+
+# Passphrase-style random words
+./wordlist -r 6
 ```
 
 ## Encoding
 
 1. Optional zstd compression of the payload  
 2. 4-byte big-endian length prefix + payload  
-3. Split into 11-bit groups → BIP39 English words (zero-padded)
+3. Split into 13-bit groups → EFF large words (list padded to 8192)
 
 Reverse path undoes the same steps.
 
