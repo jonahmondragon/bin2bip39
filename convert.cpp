@@ -55,24 +55,11 @@ int word_index(std::string_view word)
     return static_cast<int>(it - begin);
 }
 
-}  // namespace
-
 std::vector<std::string_view>
-binary_to_words(const std::vector<std::uint8_t>& payload)
+bits_to_words(const std::vector<std::uint8_t>& bits, std::size_t nbits)
 {
-    std::vector<std::uint8_t> data;
-    data.reserve(4 + payload.size());
-
-    const auto len = static_cast<std::uint32_t>(payload.size());
-    data.push_back(static_cast<std::uint8_t>((len >> 24) & 0xFF));
-    data.push_back(static_cast<std::uint8_t>((len >> 16) & 0xFF));
-    data.push_back(static_cast<std::uint8_t>((len >> 8) & 0xFF));
-    data.push_back(static_cast<std::uint8_t>(len & 0xFF));
-    data.insert(data.end(), payload.begin(), payload.end());
-
-    const std::size_t total_bits = data.size() * 8;
     const std::size_t word_count =
-        (total_bits + ::wordlist::BITS_PER_WORD - 1) / ::wordlist::BITS_PER_WORD;
+        (nbits + ::wordlist::BITS_PER_WORD - 1) / ::wordlist::BITS_PER_WORD;
 
     std::vector<std::string_view> words;
     words.reserve(word_count);
@@ -82,13 +69,31 @@ binary_to_words(const std::vector<std::uint8_t>& payload)
         unsigned index = 0;
         for (std::size_t b = 0; b < ::wordlist::BITS_PER_WORD; ++b)
         {
-            index = (index << 1) |
-                    static_cast<unsigned>(
-                        get_bit(data, w * ::wordlist::BITS_PER_WORD + b));
+            const std::size_t bit_i = w * ::wordlist::BITS_PER_WORD + b;
+            const int bit = (bit_i < nbits) ? get_bit(bits, bit_i) : 0;
+            index = (index << 1) | static_cast<unsigned>(bit);
         }
         words.push_back(::wordlist::WORDLIST[index]);
     }
     return words;
+}
+
+}  // namespace
+
+std::vector<std::string_view>
+binary_to_words(const std::vector<std::uint8_t>& payload)
+{
+    // [payload bits][stop:1]
+    const std::size_t nbits = payload.size() * 8 + 1;
+    std::vector<std::uint8_t> bits((nbits + 7) / 8, 0);
+
+    for (std::size_t i = 0; i < payload.size() * 8; ++i)
+    {
+        set_bit(bits, i, get_bit(payload, i));
+    }
+    set_bit(bits, payload.size() * 8, 1);  // stop bit
+
+    return bits_to_words(bits, nbits);
 }
 
 std::vector<std::string> split_words(const std::string& text)
@@ -113,8 +118,8 @@ bool words_to_binary(const std::vector<std::string>& words,
         return false;
     }
 
-    std::vector<std::uint8_t> data;
-    data.reserve((words.size() * ::wordlist::BITS_PER_WORD + 7) / 8);
+    const std::size_t total_bits = words.size() * ::wordlist::BITS_PER_WORD;
+    std::vector<std::uint8_t> bits((total_bits + 7) / 8, 0);
 
     for (std::size_t w = 0; w < words.size(); ++w)
     {
@@ -128,41 +133,35 @@ bool words_to_binary(const std::vector<std::string>& words,
         {
             const int bit =
                 (index >> (::wordlist::BITS_PER_WORD - 1 - b)) & 1;
-            set_bit(data, w * ::wordlist::BITS_PER_WORD + b, bit);
+            set_bit(bits, w * ::wordlist::BITS_PER_WORD + b, bit);
         }
     }
 
-    if (data.size() < 4)
+    // Last 1-bit is the stop bit; trailing zeros are pad.
+    std::size_t stop = total_bits;
+    while (stop > 0 && get_bit(bits, stop - 1) == 0)
     {
-        err = "encoded data too short";
+        --stop;
+    }
+    if (stop == 0)
+    {
+        err = "missing stop bit in encoding";
+        return false;
+    }
+    --stop;  // index of stop bit
+
+    if (stop % 8 != 0)
+    {
+        err = "payload bit length is not a multiple of 8";
         return false;
     }
 
-    const std::uint32_t len =
-        (static_cast<std::uint32_t>(data[0]) << 24) |
-        (static_cast<std::uint32_t>(data[1]) << 16) |
-        (static_cast<std::uint32_t>(data[2]) << 8) |
-        static_cast<std::uint32_t>(data[3]);
-
-    if (static_cast<std::size_t>(len) > data.size() - 4)
+    const std::size_t len = stop / 8;
+    payload.assign(len, 0);
+    for (std::size_t i = 0; i < stop; ++i)
     {
-        err = "invalid payload length in encoding";
-        return false;
+        set_bit(payload, i, get_bit(bits, i));
     }
-
-    const std::size_t used_bits = (4 + static_cast<std::size_t>(len)) * 8;
-    const std::size_t total_bits = words.size() * ::wordlist::BITS_PER_WORD;
-    for (std::size_t i = used_bits; i < total_bits; ++i)
-    {
-        if (get_bit(data, i) != 0)
-        {
-            err = "non-zero padding bits in encoding";
-            return false;
-        }
-    }
-
-    payload.assign(data.begin() + 4,
-                   data.begin() + 4 + static_cast<std::ptrdiff_t>(len));
     return true;
 }
 

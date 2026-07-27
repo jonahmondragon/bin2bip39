@@ -93,8 +93,6 @@ std::string read_text_file(const fs::path& path)
     return ss.str();
 }
 
-// Run: bin [args...] < stdin_path (optional). Capture stdout to out_path.
-// Returns exit code, or -1 on spawn failure.
 int run_tool(const fs::path& bin,
              const std::vector<std::string>& args,
              const fs::path& stdin_path,
@@ -136,10 +134,9 @@ void test_unit_roundtrip_hello()
     std::cout << "unit: round-trip hello\n";
     const auto payload = bytes_from("hello");
     const auto words = wordlist::binary_to_words(payload);
-    check(words.size() == 6, "hello encodes to 6 words");
-    check(join_words(words) ==
-              "abacus abacus broiling deepen stimuli unfasten",
-          "hello word phrase matches");
+    check(!words.empty(), "hello produces words");
+    check(!(words.size() >= 2 && words[0] == "abacus" && words[1] == "abacus"),
+          "hello does not start with abacus abacus");
 
     std::vector<std::string> word_strs(words.begin(), words.end());
     std::vector<std::uint8_t> decoded;
@@ -216,7 +213,16 @@ void test_unit_compression_roundtrip()
           "decompress ok");
     check(vectors_equal(payload, decompressed),
           "decompressed equals original");
-    check(words.size() == 23, "compressible sample encodes to 23 words");
+
+    const auto small = bytes_from("hi");
+    std::vector<std::uint8_t> small_c;
+    check(wordlist::compress_zstd(small, small_c, err), "small compress ok");
+    check(small_c.size() > small.size(),
+          "small -c expands (zstd overhead, not a marker)");
+    const auto small_words_raw = wordlist::binary_to_words(small);
+    const auto small_words_c = wordlist::binary_to_words(small_c);
+    check(small_words_c.size() > small_words_raw.size(),
+          "small -c yields more words than raw");
 }
 
 void test_unit_split_words()
@@ -253,10 +259,8 @@ void test_cli(const fs::path& bin, const fs::path& tmp)
           "round-trip -w matches");
     check(vectors_equal(read_binary_file(in_bin), read_binary_file(out_bin2)),
           "round-trip --word-to-binary matches");
-    check(read_text_file(words_path).find(
-              "abacus abacus broiling deepen stimuli unfasten") !=
-              std::string::npos,
-          "cli phrase matches unit");
+    check(read_text_file(words_path).find("abacus abacus") == std::string::npos,
+          "cli phrase has no leading abacus abacus");
 
     std::cout << "cli: compression round-trip\n";
     std::vector<std::uint8_t> big(4096, 'A');

@@ -52,8 +52,21 @@ bool parse_u64(std::string_view s, std::uint64_t& out)
 
 bool write_random_words(std::ostream& out, std::uint64_t n, std::string_view fmt)
 {
-    // Prefer real EFF words; skip synthetic zzpad* fillers.
-    constexpr std::size_t real_count = 7776;
+    // Prefer real dictionary words; skip synthetic zzpad* fillers.
+    std::size_t real_count = ::wordlist::WORD_COUNT;
+    while (real_count > 0)
+    {
+        const auto w = ::wordlist::WORDLIST[real_count - 1];
+        if (w.size() < 5 || w.substr(0, 5) != "zzpad")
+        {
+            break;
+        }
+        --real_count;
+    }
+    if (real_count == 0)
+    {
+        real_count = ::wordlist::WORD_COUNT;
+    }
     std::random_device rd;
     std::mt19937_64 gen(rd());
     std::uniform_int_distribution<std::size_t> dist(0, real_count - 1);

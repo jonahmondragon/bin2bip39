@@ -8,8 +8,8 @@
 namespace wordlist
 {
 
-// Binary -> wordlist words. Layout: 4-byte BE length + payload, zero-padded
-// to 13-bit groups.
+// Binary -> words.
+// Bit layout: [payload bits][stop:1][zero pad to 13-bit boundary].
 std::vector<std::string_view>
 binary_to_words(const std::vector<std::uint8_t>& payload);
 

@@ -63,11 +63,14 @@ cat words.txt | ./wordlist -w > out.bin
 
 ## Encoding
 
-1. Optional zstd compression of the payload  
-2. 4-byte big-endian length prefix + payload  
-3. Split into 13-bit groups → EFF large words (list padded to 8192)
+1. Optional zstd compression of the payload (`-c`)  
+2. Payload bits + a trailing **stop bit** (`1`), zero-padded to 13-bit groups  
+3. Each 13-bit group → word index in the 8192-word list  
 
-Reverse path undoes the same steps.
+Decode maps words back to bits, finds the last `1` as the stop bit, and drops the pad.  
+There is **no** embedded compression marker — use `-c` on both encode and decode when compressed.
+
+Small inputs with `-c` often produce *more* words because zstd frame headers add overhead until the data is large/repetitive enough to shrink.
 
 ## Test
 

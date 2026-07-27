@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build wordlist.hpp from wordlist.txt (EFF large / diceware style).
-# Pads to 2^BITS so every BITS-bit index is a valid word (avoids OOB).
+# Build wordlist.hpp from wordlist.txt.
+# Pads to 2^BITS if short so every BITS-bit index is valid.
 set -euo pipefail
 
 SRC="${1:-wordlist.txt}"
@@ -15,13 +15,11 @@ if (( N == 0 )); then
   echo "error: no words in $SRC" >&2
   exit 1
 fi
-
 if (( N > TARGET )); then
   echo "error: $N words exceeds 2^$BITS ($TARGET)" >&2
   exit 1
 fi
 
-# Pad with unique fillers that sort after real words (list must stay sorted).
 pad=0
 while (( N < TARGET )); do
   w=$(printf 'zzpad%04d' "$pad")
@@ -31,7 +29,7 @@ while (( N < TARGET )); do
 done
 
 {
-  cat <<EOF
+  cat <<HDR
 #pragma once
 #include <array>
 #include <string_view>
@@ -42,15 +40,15 @@ inline constexpr std::size_t WORD_COUNT = ${TARGET};
 inline constexpr std::size_t BITS_PER_WORD = ${BITS};
 
 inline constexpr std::array<std::string_view, WORD_COUNT> WORDLIST = {{
-EOF
+HDR
   for w in "${WORDS[@]}"; do
     printf '    "%s",\n' "$w"
   done
-  cat <<'EOF'
+  cat <<'FTR'
 }};
 
 }  // namespace wordlist
-EOF
+FTR
 } > "$OUT"
 
-echo "Generated $OUT with $TARGET words (source had $((TARGET - pad)) real, $pad pad)"
+echo "Generated $OUT with $TARGET words (padded $pad)"
