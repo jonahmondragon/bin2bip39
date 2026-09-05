@@ -1,6 +1,6 @@
 # Binaries
-/bin2bip39
-/tests/test_bin2bip39
+wordlist.exe
+wordlist
 
 # Object files / archives
 *.o
